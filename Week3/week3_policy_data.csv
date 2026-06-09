@@ -1,0 +1,11 @@
+Country,%Renewable,CO2_per_capita,Region,Apply_Policy
+Nepal,88,1.2,Asia,yes
+Kenya,65,1.8,Africa,yes
+Germany,45,6.5,Europe,no
+India,25,1.9,Asia,yes
+Australia,35,17.0,Oceania,no
+Brazil,80,2.1,South America,yes
+Nigeria,18,0.9,Africa,yes
+Sweden,95,4.0,Europe,no
+Bangladesh,20,1.3,Asia,yes
+USA,12,15.5,North America,no
