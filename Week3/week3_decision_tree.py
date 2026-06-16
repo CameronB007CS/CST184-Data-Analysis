@@ -4,75 +4,94 @@ from sklearn.tree import DecisionTreeClassifier, plot_tree, export_text
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import classification_report, accuracy_score
 
-# ── Load Data ──────────────────────────────────────────────
+# load the dataset
 df = pd.read_csv("week3_policy_data.csv")
-print(df.head(10))
+print(df.head(10))                                                                                      #I loaded the CSV into a pandas DataFrame and used 
+                                                                                                        #head(), info() and describe() to get a feel for the data — checking column types, making sure nothing was missing, and seeing the range of values."
 print()
-df.info()
-print()
+
+# basic stats like min, max, mean etc
 print(df.describe())
 
-# ── Encode Target ──────────────────────────────────────────
-le = LabelEncoder()
-df["Policy_Label"] = le.fit_transform(df["Apply_Policy"])
-print("\nLabel mapping:", dict(zip(le.classes_, le.transform(le.classes_))))
+# turning yes/no into 1/0 so the model can actually read it
+df["Label"] = df["Apply_Policy"].map({"yes": 1, "no": 0})
+print(df[["Country", "Apply_Policy", "Label"]])
 
-# ── Features & Target ──────────────────────────────────────
+# X = the inputs, y = what we're trying to predict
 X = df[["%Renewable", "CO2_per_capita"]]
-y = df["Policy_Label"]
+y = df["Label"]
 
-print("\nClass distribution:")
-print(df["Apply_Policy"].value_counts())
+# train the tree
+tree = DecisionTreeClassifier(max_depth=3, random_state=0)
+tree.fit(X, y)
 
-# ── Train Decision Tree ────────────────────────────────────
-clf = DecisionTreeClassifier(max_depth=3, random_state=42)
-clf.fit(X, y)
-
-print("\nTree depth:", clf.get_depth())
-print("Leaves:", clf.get_n_leaves())
-print()
-print(export_text(clf, feature_names=["%Renewable", "CO2_per_capita"]))
-
-# ── Visualise Tree ─────────────────────────────────────────
-plt.figure(figsize=(14, 6))
-plot_tree(clf, feature_names=["%Renewable", "CO2_per_capita"],
-          class_names=["No Policy", "Apply Policy"],
-          filled=True, rounded=True, fontsize=10)
-plt.title("Decision Tree: SDG 7 Policy Classification")
-plt.tight_layout()
-plt.savefig("decision_tree.png", dpi=150)
+# draw the tree
+plt.figure(figsize=(10, 6))
+plot_tree(tree, feature_names=X.columns, class_names=["No", "Yes"], filled=True, rounded=True)
+plt.title("Decision Tree – Apply Policy A")
 plt.show()
 
-# ── Evaluate ───────────────────────────────────────────────
-y_pred = clf.predict(X)
-print("Accuracy:", accuracy_score(y, y_pred))
-print()
-print(classification_report(y, y_pred, target_names=["No Policy", "Apply Policy"]))
+# test some new countries
+new_data = pd.DataFrame({
+    "%Renewable": [52, 20, 75],
+    "CO2_per_capita": [1.5, 2.5, 3.0]
+})
 
-df["Predicted"] = le.inverse_transform(y_pred)
-print(df[["Country", "Apply_Policy", "Predicted", "%Renewable", "CO2_per_capita"]])
+predictions = tree.predict(new_data)
+print(predictions)
 
-# ── Feature Importance ─────────────────────────────────────
-importances = pd.Series(clf.feature_importances_, index=["%Renewable", "CO2_per_capita"])
-print("\nFeature Importance:")
-print(importances)
 
-importances.sort_values().plot(kind="barh", color=["steelblue", "coral"], edgecolor="black")
-plt.title("Feature Importance")
-plt.xlabel("Importance Score")
+# CHALLENGE TASK TIME
+
+# Challenge 1: add Region as a third feature
+# Region is text so we encode it into numbers first, same idea as the label encoding above
+le = LabelEncoder()
+df["Region_Encoded"] = le.fit_transform(df["Region"])
+
+print("\nRegion encoding:")
+for original, encoded in zip(le.classes_, le.transform(le.classes_)):
+    print(f"  {original} -> {encoded}")
+
+X3 = df[["%Renewable", "CO2_per_capita", "Region_Encoded"]]
+tree3 = DecisionTreeClassifier(max_depth=3, random_state=0)
+tree3.fit(X3, y)
+
+print("\nTree with Region added:")
+print(export_text(tree3, feature_names=["%Renewable", "CO2_per_capita", "Region"]))
+
+plt.figure(figsize=(16, 7))
+plot_tree(tree3, feature_names=["%Renewable", "CO2_per_capita", "Region"],
+          class_names=["No", "Yes"],
+          filled=True, rounded=True, fontsize=9)
+plt.title("Decision Tree with Region Added")
 plt.tight_layout()
 plt.show()
 
-# ── Predict New Countries ──────────────────────────────────
-test_cases = [
-    {"country": "Hypothetical A", "%Renewable": 70, "CO2_per_capita": 2.0},
-    {"country": "Hypothetical B", "%Renewable": 10, "CO2_per_capita": 12.0},
-    {"country": "Hypothetical C", "%Renewable": 90, "CO2_per_capita": 5.0},
-]
 
-print("\nPredictions for new countries:")
-for tc in test_cases:
-    X_new = pd.DataFrame([[tc["%Renewable"], tc["CO2_per_capita"]]],
-                         columns=["%Renewable", "CO2_per_capita"])
-    pred = le.inverse_transform(clf.predict(X_new))[0]
-    print(f"  {tc['country']} — {tc['%Renewable']}% renewable, {tc['CO2_per_capita']}t CO2 → {pred}")
+# Challenge 2: use predict_proba to get confidence scores instead of hard yes/no
+proba = tree.predict_proba(new_data)
+
+print("\nProbability estimates (No / Yes):")
+for i, (row, prob) in enumerate(zip(new_data.itertuples(), proba)):
+    print(f"  Country {i+1} — {row._1}% renewable, {row.CO2_per_capita}t CO2")
+    print(f"    No: {prob[0]:.0%}  |  Yes: {prob[1]:.0%}")
+
+
+# Challenge 3: create a new policy label using a stricter CO2 threshold
+# instead of the original yes/no we're making our own, qualify if CO2 < 1.5
+df["Strict_Policy"] = (df["CO2_per_capita"] < 1.5).astype(int)
+
+print("\nStrict policy (CO2 < 1.5):")
+print(df[["Country", "CO2_per_capita", "Strict_Policy"]])
+
+tree_strict = DecisionTreeClassifier(max_depth=3, random_state=0)
+tree_strict.fit(X, df["Strict_Policy"])
+
+print("\nStrict policy tree rules:")
+print(export_text(tree_strict, feature_names=["%Renewable", "CO2_per_capita"]))
+
+plt.figure(figsize=(10, 6))
+plot_tree(tree_strict, feature_names=X.columns, class_names=["No", "Yes"],
+          filled=True, rounded=True)
+plt.title("Decision Tree – Strict CO2 < 1.5 Policy")
+plt.show()
